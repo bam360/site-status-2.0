@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>site-status</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%230ca30c'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1>site-status</h1>
+  <div class="filters" role="group" aria-label="Time range">
+    <button class="range-btn" data-hours="1">1h</button>
+    <button class="range-btn" data-hours="6">6h</button>
+    <button class="range-btn selected" data-hours="24">24h</button>
+    <button class="range-btn" data-hours="168">7d</button>
+    <button class="range-btn" data-hours="720">30d</button>
+  </div>
+  <div class="updated" id="updated"></div>
+</header>
+
+<main id="cards" class="cards" aria-live="polite"></main>
+
+<template id="card-tpl">
+  <section class="card">
+    <button class="card-head" aria-expanded="false">
+      <span class="status-chip"><span class="status-icon" aria-hidden="true"></span><span class="status-label"></span></span>
+      <span class="host-name"></span>
+      <span class="host-addr"></span>
+      <span class="chev" aria-hidden="true">▾</span>
+    </button>
+    <div class="stats"></div>
+    <div class="spark" aria-hidden="true"></div>
+    <div class="detail" hidden>
+      <div class="chart-block">
+        <h2>Latency <span class="chart-sub"></span></h2>
+        <div class="chart lat-chart"></div>
+      </div>
+      <div class="chart-block tp-block">
+        <h2>Throughput <span class="chart-sub"></span></h2>
+        <div class="chart tp-chart"></div>
+      </div>
+      <div class="chart-block">
+        <h2>Recent samples</h2>
+        <div class="table-wrap"><table class="samples">
+          <thead><tr><th>Time</th><th>Status</th><th>Latency</th><th>Loss</th><th>Note</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </div>
+  </section>
+</template>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

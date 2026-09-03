@@ -1,0 +1,55 @@
+# site-status configuration
+#
+# Copy to config.yaml, list the hosts on your network, and start with:
+#   python -m sitestatus --config config.yaml
+
+listen:
+  host: 0.0.0.0
+  port: 8080
+
+database: sitestatus.db
+
+# Samples older than this are pruned once a day.
+retention_days: 30
+
+# Per-check defaults; any host can override them inside its check block.
+defaults:
+  ping_interval: 30        # seconds between ping rounds
+  ping_count: 5            # packets per round (loss % comes from these)
+  ping_timeout: 2          # seconds per packet
+  tcp_interval: 30         # seconds between TCP connect checks
+  tcp_timeout: 3
+  throughput_interval: 900 # seconds between throughput tests (they're heavy)
+  throughput_max_seconds: 8
+  # Status thresholds for the "degraded" state
+  degraded_loss_pct: 20
+  degraded_latency_ms: 250
+
+hosts:
+  - name: Router
+    address: 192.168.1.1
+    checks:
+      ping: {}                 # ICMP ping with the defaults above
+
+  - name: NAS
+    address: 192.168.1.20
+    checks:
+      ping:
+        interval: 15
+      throughput:              # HTTP download speed test
+        method: http
+        url: http://192.168.1.20/testfile.bin
+
+  - name: Lab server
+    address: 192.168.1.30
+    checks:
+      ping: {}
+      throughput:              # requires `iperf3 -s` running on the target
+        method: iperf3
+        port: 5201
+
+  - name: Web app
+    address: 192.168.1.40
+    checks:
+      tcp:                     # TCP connect latency (no ICMP needed)
+        port: 443
