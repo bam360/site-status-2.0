@@ -27,6 +27,10 @@ def _ping_argv(address: str, count: int, timeout: int) -> list[str]:
 
 async def icmp_ping(address: str, count: int, timeout: int) -> dict:
     """Ping `address` and return latency (min/avg/max ms) and packet loss %."""
+    if sys.platform == "win32":
+        from . import win_ping
+        return await asyncio.to_thread(win_ping.ping_round, address, count, timeout)
+
     if shutil.which("ping") is None:
         return {"ok": False, "error": "ping binary not found"}
 

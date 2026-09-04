@@ -120,6 +120,14 @@ def test_http_throughput():
     assert r["ok"] and r["bytes"] == 1 << 20 and r["mbps"] > 0
 
 
+@pytest.mark.skipif(__import__("sys").platform == "win32", reason="non-windows fallback")
+def test_win_ping_graceful_off_windows():
+    # On non-Windows the module must import and fail cleanly, never raise
+    from sitestatus import win_ping
+    r = win_ping.ping_round("127.0.0.1", 1, 1)
+    assert r["ok"] is False and "error" in r
+
+
 def test_host_status(config):
     host = config.hosts[0]
     now = time.time()

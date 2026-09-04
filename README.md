@@ -16,7 +16,10 @@ self-hosted web dashboard.
 
 ## Quick start
 
-Requires Python 3.10+.
+Requires Python 3.10+ ([python.org](https://www.python.org/downloads/);
+on Windows tick "Add python.exe to PATH" in the installer).
+
+**Linux / macOS**
 
 ```sh
 python3 -m venv .venv && . .venv/bin/activate
@@ -28,8 +31,23 @@ cp config.example.yaml config.yaml
 python -m sitestatus --config config.yaml
 ```
 
+**Windows** (PowerShell or Command Prompt, inside the project folder)
+
+```bat
+py -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+
+copy config.example.yaml config.yaml
+notepad config.yaml   :: list your hosts
+
+py -m sitestatus --config config.yaml
+```
+
 Then open http://localhost:8080 (or whatever `listen` says) from any
-machine on your network.
+machine on your network. If Windows Firewall asks whether to allow
+Python to accept connections, allow it on private networks so other
+devices can reach the dashboard.
 
 ## Configuration
 
@@ -53,8 +71,10 @@ hosts:
 
 Notes:
 
-- **ICMP ping** shells out to the system `ping`, so it works unprivileged
-  on Linux and macOS. If a device drops ICMP, use a `tcp` check instead.
+- **ICMP ping** works unprivileged everywhere: on Linux and macOS it
+  shells out to the system `ping`; on Windows it uses the `IcmpSendEcho`
+  API directly (IPv4, language-independent — no output parsing). If a
+  device drops ICMP, use a `tcp` check instead.
 - **HTTP throughput** downloads for at most `max_seconds` (default 8) and
   reports Mbit/s. Point it at a reasonably large file (≥ 50 MB) served on
   the LAN so the measurement saturates the link, not the file.
@@ -89,6 +109,12 @@ Restart=on-failure
 [Install]
 WantedBy=multi-user.target
 ```
+
+On Windows, use Task Scheduler: create a task that runs at startup
+("whether user is logged on or not") with the action
+`C:\path\to\site-status-2.0\.venv\Scripts\python.exe`, arguments
+`-m sitestatus --config config.yaml`, and "Start in" set to the project
+folder.
 
 ## Development
 
