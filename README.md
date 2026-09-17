@@ -19,7 +19,16 @@ self-hosted web dashboard.
 Requires Python 3.10+ ([python.org](https://www.python.org/downloads/);
 on Windows tick "Add python.exe to PATH" in the installer).
 
-**Linux / macOS**
+**macOS — one click**
+
+Double-click **`start-mac.command`** (the first time, right-click it and
+choose Open — macOS blocks unsigned downloaded scripts otherwise). It sets
+up a virtualenv, installs dependencies, opens `config.yaml` in TextEdit on
+first run, then starts the monitor and opens the dashboard. If macOS asks
+to install its command line developer tools, click Install and run the
+file again afterwards.
+
+**Linux / macOS — manual**
 
 ```sh
 python3 -m venv .venv && . .venv/bin/activate
