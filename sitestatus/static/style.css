@@ -64,6 +64,24 @@ body {
 .topbar h1 { font-size: 16px; font-weight: 650; margin: 0; }
 .updated { color: var(--muted); font-size: 12px; }
 
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin-right: 10px;
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.live.on .live-dot { background: var(--status-good); }
+.live.on #live-label { color: var(--ink-2); }
+
 .add-btn {
   margin-left: auto;
   margin-right: 14px;
@@ -178,6 +196,9 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.35); }
   padding: 14px 16px 12px;
   overflow: hidden;
 }
+.card[draggable="true"] { cursor: grab; }
+.card.dragging { opacity: 0.45; }
+.card.drag-over { outline: 2px dashed var(--baseline); outline-offset: 2px; }
 .card.expanded { grid-column: 1 / -1; }
 
 .card-head {

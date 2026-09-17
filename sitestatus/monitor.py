@@ -16,12 +16,39 @@ log = logging.getLogger("sitestatus.monitor")
 PRUNE_INTERVAL = 24 * 3600
 
 
+class EventHub:
+    """Fan-out of monitor events to live-view (SSE) subscribers."""
+
+    def __init__(self) -> None:
+        self._subs: set[asyncio.Queue] = set()
+
+    def subscribe(self) -> asyncio.Queue:
+        q: asyncio.Queue = asyncio.Queue(maxsize=200)
+        self._subs.add(q)
+        return q
+
+    def unsubscribe(self, q: asyncio.Queue) -> None:
+        self._subs.discard(q)
+
+    def publish(self, event: dict) -> None:
+        for q in list(self._subs):
+            try:
+                q.put_nowait(event)
+            except asyncio.QueueFull:
+                pass  # slow consumer; it will catch up on its next poll
+
+
 class Monitor:
-    def __init__(self, config: Config, db: Database):
+    def __init__(self, config: Config, db: Database, hub: EventHub | None = None):
         self.config = config
         self.db = db
+        self.hub = hub
         self._host_tasks: dict[str, list[asyncio.Task]] = {}
         self._prune_task: asyncio.Task | None = None
+
+    def _notify(self, host_name: str) -> None:
+        if self.hub:
+            self.hub.publish({"type": "sample", "host": host_name})
 
     async def start(self) -> None:
         for host in self.config.hosts:
@@ -70,6 +97,7 @@ class Monitor:
                     rtt_max=r.get("rtt_max"), loss_pct=r.get("loss_pct"),
                     error=r.get("error"),
                 )
+                self._notify(host.name)
                 if not r["ok"]:
                     log.warning("ping %s (%s): %s", host.name, host.address, r.get("error"))
             except Exception:
@@ -90,6 +118,7 @@ class Monitor:
                     rtt_max=r.get("rtt_max"), loss_pct=r.get("loss_pct"),
                     error=r.get("error"),
                 )
+                self._notify(host.name)
                 if not r["ok"]:
                     log.warning("tcp %s (%s:%d): %s", host.name, host.address, c.port, r.get("error"))
             except Exception:
@@ -113,6 +142,7 @@ class Monitor:
                     mbps=r.get("mbps"), nbytes=r.get("bytes"),
                     seconds=r.get("seconds"), error=r.get("error"),
                 )
+                self._notify(host.name)
                 if not r["ok"]:
                     log.warning("throughput %s: %s", host.name, r.get("error"))
             except Exception:

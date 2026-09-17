@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
+import json
 import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .config import Config, ConfigError, build_host, save_hosts
 from .db import Database
-from .monitor import Monitor
+from .monitor import EventHub, Monitor
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -73,9 +75,14 @@ class NewHost(BaseModel):
     throughput_url: str | None = None       # optional http speed-test URL
 
 
+class HostOrder(BaseModel):
+    names: list[str]
+
+
 def create_app(config: Config) -> FastAPI:
     db = Database(config.database)
-    monitor = Monitor(config, db)
+    hub = EventHub()
+    monitor = Monitor(config, db, hub)
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -159,6 +166,7 @@ def create_app(config: Config) -> FastAPI:
         config.hosts.append(host)
         monitor.add_host(host)
         save_hosts(config)
+        hub.publish({"type": "hosts_changed"})
         return {"ok": True, "name": host.name}
 
     @app.delete("/api/hosts/{host_name}")
@@ -170,7 +178,36 @@ def create_app(config: Config) -> FastAPI:
         await monitor.remove_host(host.name)
         db.delete_host(host.name)
         save_hosts(config)
+        hub.publish({"type": "hosts_changed"})
         return {"ok": True}
+
+    @app.put("/api/hosts/order")
+    async def api_reorder_hosts(body: HostOrder):
+        if sorted(body.names) != sorted(h.name for h in config.hosts):
+            raise HTTPException(422, "names must be exactly the current hosts")
+        config.hosts.sort(key=lambda h: body.names.index(h.name))
+        save_hosts(config)
+        return {"ok": True}
+
+    @app.get("/api/events")
+    async def api_events():
+        """Server-sent events: one message per completed check."""
+        q = hub.subscribe()
+
+        async def gen():
+            try:
+                yield "retry: 3000\n\n"
+                while True:
+                    try:
+                        ev = await asyncio.wait_for(q.get(), timeout=15)
+                        yield f"data: {json.dumps(ev)}\n\n"
+                    except asyncio.TimeoutError:
+                        yield ": keepalive\n\n"
+            finally:
+                hub.unsubscribe(q)
+
+        return StreamingResponse(gen(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache"})
 
     @app.get("/")
     def index():

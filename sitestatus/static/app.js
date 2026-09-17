@@ -9,9 +9,13 @@ const state = {
   expanded: null,      // host name whose detail panel is open
   histories: {},       // host name -> /api/history payload
   refreshTimer: null,
+  hoverHold: false,    // pointer is on a chart: don't re-render under it
+  dragging: null,      // host name being dragged, or null
 };
 
-const REFRESH_MS = 15000;
+// Fallback poll only; live SSE events drive updates between polls.
+const REFRESH_MS = 60000;
+const LIVE_DEBOUNCE_MS = 1200;
 
 /* ---------- small helpers ---------- */
 
@@ -237,6 +241,8 @@ function timeSeriesChart(container, opts) {
   overlay.tabIndex = 0;
   overlay.setAttribute("role", "application");
   overlay.setAttribute("aria-label", (opts.seriesName || "chart") + "; use arrow keys to inspect values");
+  overlay.addEventListener("pointerenter", () => { state.hoverHold = true; });
+  overlay.addEventListener("pointerleave", () => { state.hoverHold = false; });
   container.appendChild(overlay);
 
   let active = -1;
@@ -391,6 +397,7 @@ function renderCards() {
     }
 
     $(".card-head", card).addEventListener("click", () => toggleExpand(h.name));
+    makeDraggable(card);
     grid.appendChild(card);
 
     const hist = state.histories[h.name];
@@ -492,6 +499,52 @@ function toggleExpand(name) {
   refresh();
 }
 
+/* ---------- drag to rearrange ---------- */
+
+function makeDraggable(card) {
+  card.draggable = true;
+  card.addEventListener("dragstart", e => {
+    state.dragging = card.dataset.host;
+    card.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", card.dataset.host);
+  });
+  card.addEventListener("dragend", async () => {
+    card.classList.remove("dragging");
+    state.dragging = null;
+    const order = [...$("#cards").children].map(c => c.dataset.host);
+    const current = state.hosts.map(h => h.name);
+    if (order.join("\n") !== current.join("\n")) {
+      state.hosts.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
+      try {
+        await fetchJSON("/api/hosts/order", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ names: order }),
+        });
+      } catch (err) {
+        alert("Could not save the new order: " + err.message);
+        refresh();
+      }
+    }
+  });
+}
+
+$("#cards").addEventListener("dragover", e => {
+  if (!state.dragging) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  const grid = $("#cards");
+  const dragged = grid.querySelector(".card.dragging");
+  if (!dragged) return;
+  const target = e.target.closest("section.card");
+  if (!target || target === dragged) return;
+  const rect = target.getBoundingClientRect();
+  const before = (e.clientX - rect.left) / rect.width < 0.5;
+  grid.insertBefore(dragged, before ? target : target.nextSibling);
+});
+$("#cards").addEventListener("drop", e => e.preventDefault());
+
 /* ---------- data flow ---------- */
 
 async function fetchJSON(url, options) {
@@ -561,9 +614,13 @@ async function removeHost(name) {
   }
 }
 
-async function refresh() {
+async function refresh(quiet) {
+  if (state.dragging || state.hoverHold) {
+    scheduleRefresh();   // try again once the interaction ends
+    return;
+  }
   const grid = $("#cards");
-  grid.classList.add("refreshing");
+  if (!quiet) grid.classList.add("refreshing");
   try {
     const status = await fetchJSON("/api/status?hours=" + state.hours);
     state.hosts = status.hosts;
@@ -601,5 +658,31 @@ window.addEventListener("resize", () => {
   resizeTimer = setTimeout(renderCards, 150);
 });
 
+/* ---------- live updates (server-sent events) ---------- */
+
+let refreshQueued = null;
+function scheduleRefresh() {
+  clearTimeout(refreshQueued);
+  refreshQueued = setTimeout(() => refresh(true), LIVE_DEBOUNCE_MS);
+}
+
+function setLive(on, label) {
+  $("#live").classList.toggle("on", on);
+  $("#live-label").textContent = label;
+}
+
+function connectEvents() {
+  const es = new EventSource("/api/events");
+  es.onopen = () => setLive(true, "live");
+  es.onerror = () => setLive(false, "reconnecting");   // EventSource retries itself
+  es.onmessage = e => {
+    let ev = {};
+    try { ev = JSON.parse(e.data); } catch (err) { return; }
+    if (ev.type === "hosts_changed") refresh(true);
+    else scheduleRefresh();
+  };
+}
+
 refresh();
-state.refreshTimer = setInterval(refresh, REFRESH_MS);
+connectEvents();
+state.refreshTimer = setInterval(() => refresh(true), REFRESH_MS);

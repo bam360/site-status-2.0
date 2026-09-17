@@ -163,6 +163,40 @@ def test_api(config):
         assert client.get("/").status_code == 200
 
 
+def test_event_hub():
+    from sitestatus.monitor import EventHub
+
+    async def run():
+        hub = EventHub()
+        q = hub.subscribe()
+        hub.publish({"type": "sample", "host": "x"})
+        assert (await q.get())["host"] == "x"
+        hub.unsubscribe(q)
+        hub.publish({"type": "sample", "host": "y"})  # no subscribers: no error
+        assert q.empty()
+
+    asyncio.run(run())
+
+
+def test_api_reorder_hosts(config):
+    import yaml
+
+    app = create_app(config)
+    with TestClient(app) as client:
+        r = client.put("/api/hosts/order", json={"names": ["web", "router"]})
+        assert r.status_code == 200
+        raw = yaml.safe_load(config.path.read_text())
+        assert [h["name"] for h in raw["hosts"]] == ["web", "router"]
+        names = [h["name"] for h in client.get("/api/status").json()["hosts"]]
+        assert names == ["web", "router"]
+
+        # wrong or partial name sets are rejected
+        assert client.put("/api/hosts/order",
+                          json={"names": ["web"]}).status_code == 422
+        assert client.put("/api/hosts/order",
+                          json={"names": ["web", "nope"]}).status_code == 422
+
+
 def test_api_add_remove_host(config):
     import yaml
 
