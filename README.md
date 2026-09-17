@@ -31,7 +31,14 @@ cp config.example.yaml config.yaml
 python -m sitestatus --config config.yaml
 ```
 
-**Windows** (PowerShell or Command Prompt, inside the project folder)
+**Windows — one click**
+
+Double-click **`start-windows.bat`**. It installs Python automatically if
+it's missing (official installer from python.org), installs dependencies,
+opens `config.yaml` in Notepad on first run, then starts the monitor and
+opens the dashboard. Keep the window open; run the same file every time.
+
+**Windows — manual** (PowerShell or Command Prompt, inside the project folder)
 
 ```bat
 py -m venv .venv
