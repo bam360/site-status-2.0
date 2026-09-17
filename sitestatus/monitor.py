@@ -20,24 +20,41 @@ class Monitor:
     def __init__(self, config: Config, db: Database):
         self.config = config
         self.db = db
-        self._tasks: list[asyncio.Task] = []
+        self._host_tasks: dict[str, list[asyncio.Task]] = {}
+        self._prune_task: asyncio.Task | None = None
 
     async def start(self) -> None:
         for host in self.config.hosts:
-            if host.ping:
-                self._tasks.append(asyncio.create_task(self._ping_loop(host)))
-            if host.tcp:
-                self._tasks.append(asyncio.create_task(self._tcp_loop(host)))
-            if host.throughput:
-                self._tasks.append(asyncio.create_task(self._throughput_loop(host)))
-        self._tasks.append(asyncio.create_task(self._prune_loop()))
-        log.info("monitor started: %d tasks", len(self._tasks))
+            self.add_host(host)
+        self._prune_task = asyncio.create_task(self._prune_loop())
+        log.info("monitor started: %d hosts", len(self._host_tasks))
+
+    def add_host(self, host: Host) -> None:
+        """Start check loops for a host; call on startup or a live add."""
+        tasks = []
+        if host.ping:
+            tasks.append(asyncio.create_task(self._ping_loop(host)))
+        if host.tcp:
+            tasks.append(asyncio.create_task(self._tcp_loop(host)))
+        if host.throughput:
+            tasks.append(asyncio.create_task(self._throughput_loop(host)))
+        self._host_tasks[host.name] = tasks
+
+    async def remove_host(self, name: str) -> None:
+        tasks = self._host_tasks.pop(name, [])
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     async def stop(self) -> None:
-        for t in self._tasks:
+        all_tasks = [t for ts in self._host_tasks.values() for t in ts]
+        if self._prune_task:
+            all_tasks.append(self._prune_task)
+        for t in all_tasks:
             t.cancel()
-        await asyncio.gather(*self._tasks, return_exceptions=True)
-        self._tasks.clear()
+        await asyncio.gather(*all_tasks, return_exceptions=True)
+        self._host_tasks.clear()
+        self._prune_task = None
 
     async def _ping_loop(self, host: Host) -> None:
         c = host.ping

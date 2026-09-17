@@ -454,6 +454,8 @@ function renderDetail(card, h, hist) {
     tpBlock.hidden = true;
   }
 
+  $(".remove-btn", detail).onclick = () => removeHost(h.name);
+
   const tbody = $("table.samples tbody", detail);
   tbody.textContent = "";
   const recent = hist.ping.slice(-20).reverse();
@@ -492,10 +494,71 @@ function toggleExpand(name) {
 
 /* ---------- data flow ---------- */
 
-async function fetchJSON(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(url + " -> " + r.status);
+async function fetchJSON(url, options) {
+  const r = await fetch(url, options);
+  if (!r.ok) {
+    let msg = url + " -> " + r.status;
+    try {
+      const body = await r.json();
+      if (body.detail) msg = typeof body.detail === "string"
+        ? body.detail : JSON.stringify(body.detail);
+    } catch (e) { /* non-JSON error body */ }
+    throw new Error(msg);
+  }
   return r.json();
+}
+
+/* ---------- add / remove hosts ---------- */
+
+const addDialog = $("#add-dialog");
+const addForm = $("#add-form");
+const addError = $("#add-error");
+
+$("#add-host-btn").addEventListener("click", () => {
+  addForm.reset();
+  addError.hidden = true;
+  $("#port-row").hidden = true;
+  addDialog.showModal();
+});
+$("#add-cancel").addEventListener("click", () => addDialog.close());
+addForm.elements.check.addEventListener("change", e => {
+  $("#port-row").hidden = e.target.value !== "tcp";
+});
+
+addForm.addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = addForm.elements;
+  const body = {
+    name: f.name.value.trim(),
+    address: f.address.value.trim(),
+    check: f.check.value,
+    port: f.check.value === "tcp" && f.port.value ? parseInt(f.port.value, 10) : null,
+    throughput_url: f.throughput_url.value.trim() || null,
+  };
+  try {
+    await fetchJSON("/api/hosts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    addDialog.close();
+    refresh();
+  } catch (err) {
+    addError.textContent = err.message;
+    addError.hidden = false;
+  }
+});
+
+async function removeHost(name) {
+  if (!confirm('Remove "' + name + '" and its history?')) return;
+  try {
+    await fetchJSON("/api/hosts/" + encodeURIComponent(name), { method: "DELETE" });
+    if (state.expanded === name) state.expanded = null;
+    delete state.histories[name];
+    refresh();
+  } catch (err) {
+    alert("Could not remove host: " + err.message);
+  }
 }
 
 async function refresh() {

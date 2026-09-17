@@ -17,8 +17,38 @@
     <button class="range-btn" data-hours="168">7d</button>
     <button class="range-btn" data-hours="720">30d</button>
   </div>
+  <button id="add-host-btn" class="add-btn">+ Add host</button>
   <div class="updated" id="updated"></div>
 </header>
+
+<dialog id="add-dialog">
+  <form id="add-form" method="dialog">
+    <h2>Add host</h2>
+    <label>Name
+      <input name="name" required maxlength="80" placeholder="NAS" autocomplete="off">
+    </label>
+    <label>Address (IP or hostname)
+      <input name="address" required maxlength="255" placeholder="192.168.1.20" autocomplete="off">
+    </label>
+    <label>Check type
+      <select name="check">
+        <option value="ping" selected>Ping (ICMP)</option>
+        <option value="tcp">TCP port</option>
+      </select>
+    </label>
+    <label id="port-row" hidden>Port
+      <input name="port" type="number" min="1" max="65535" placeholder="443">
+    </label>
+    <label>Throughput test URL <span class="opt">(optional)</span>
+      <input name="throughput_url" placeholder="http://192.168.1.20/testfile.bin" autocomplete="off">
+    </label>
+    <p class="form-error" id="add-error" hidden></p>
+    <div class="form-actions">
+      <button type="button" id="add-cancel">Cancel</button>
+      <button type="submit" class="primary">Add</button>
+    </div>
+  </form>
+</dialog>
 
 <main id="cards" class="cards" aria-live="polite"></main>
 
@@ -42,7 +72,10 @@
         <div class="chart tp-chart"></div>
       </div>
       <div class="chart-block">
-        <h2>Recent samples</h2>
+        <div class="detail-head">
+          <h2>Recent samples</h2>
+          <button class="remove-btn">Remove host</button>
+        </div>
         <div class="table-wrap"><table class="samples">
           <thead><tr><th>Time</th><th>Status</th><th>Latency</th><th>Loss</th><th>Note</th></tr></thead>
           <tbody></tbody>

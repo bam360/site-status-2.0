@@ -45,6 +45,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   margin: 0;
   background: var(--page);
@@ -61,7 +62,86 @@ body {
   flex-wrap: wrap;
 }
 .topbar h1 { font-size: 16px; font-weight: 650; margin: 0; }
-.updated { margin-left: auto; color: var(--muted); font-size: 12px; }
+.updated { color: var(--muted); font-size: 12px; }
+
+.add-btn {
+  margin-left: auto;
+  margin-right: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.add-btn:hover { border-color: var(--baseline); }
+
+dialog {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-1);
+  color: var(--ink);
+  padding: 20px 22px;
+  width: min(380px, 90vw);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+}
+dialog::backdrop { background: rgba(0, 0, 0, 0.35); }
+#add-form h2 { margin: 0 0 14px; font-size: 15px; }
+#add-form label {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+#add-form .opt { font-weight: 400; color: var(--muted); }
+#add-form input, #add-form select {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--page);
+  border: 1px solid var(--baseline);
+  border-radius: 7px;
+}
+.form-error { color: var(--status-crit); font-size: 12.5px; margin: 4px 0 0; }
+.form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.form-actions button {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.form-actions button.primary {
+  background: var(--series-lat);
+  border-color: var(--series-lat);
+  color: #fff;
+  font-weight: 600;
+}
+
+.detail-head { display: flex; align-items: center; justify-content: space-between; }
+.remove-btn {
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--status-crit);
+  cursor: pointer;
+}
+.remove-btn:hover { border-color: var(--status-crit); }
 
 .filters { display: flex; gap: 4px; }
 .range-btn {

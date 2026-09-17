@@ -161,3 +161,32 @@ def test_api(config):
 
         assert client.get("/api/history/nope").status_code == 404
         assert client.get("/").status_code == 200
+
+
+def test_api_add_remove_host(config):
+    import yaml
+
+    app = create_app(config)
+    with TestClient(app) as client:
+        r = client.post("/api/hosts", json={
+            "name": "printer", "address": "127.0.0.1", "check": "tcp", "port": 9,
+        })
+        assert r.status_code == 201
+
+        raw = yaml.safe_load(config.path.read_text())
+        assert any(h["name"] == "printer" for h in raw["hosts"])
+        names = [h["name"] for h in client.get("/api/status").json()["hosts"]]
+        assert "printer" in names
+
+        # invalid requests
+        assert client.post("/api/hosts", json={
+            "name": "PRINTER", "address": "x"}).status_code == 409
+        assert client.post("/api/hosts", json={
+            "name": "z", "address": "x", "check": "tcp"}).status_code == 422
+        assert client.post("/api/hosts", json={
+            "name": "z", "address": "x", "throughput_url": "ftp://x"}).status_code == 422
+
+        assert client.delete("/api/hosts/printer").json()["ok"] is True
+        raw = yaml.safe_load(config.path.read_text())
+        assert all(h["name"] != "printer" for h in raw["hosts"])
+        assert client.delete("/api/hosts/printer").status_code == 404

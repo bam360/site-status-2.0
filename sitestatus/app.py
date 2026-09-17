@@ -9,8 +9,9 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
-from .config import Config
+from .config import Config, ConfigError, build_host, save_hosts
 from .db import Database
 from .monitor import Monitor
 
@@ -62,6 +63,14 @@ def _downsample(rows: list[dict], max_points: int) -> list[dict]:
         })
         i += size
     return out
+
+
+class NewHost(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    address: str = Field(min_length=1, max_length=255)
+    check: str = "ping"                     # "ping" or "tcp"
+    port: int | None = Field(None, ge=1, le=65535)   # tcp check port
+    throughput_url: str | None = None       # optional http speed-test URL
 
 
 def create_app(config: Config) -> FastAPI:
@@ -123,6 +132,45 @@ def create_app(config: Config) -> FastAPI:
             "ping": _downsample(db.ping_history(host_name, since), max_points),
             "throughput": db.throughput_history(host_name, since),
         }
+
+    @app.post("/api/hosts", status_code=201)
+    async def api_add_host(body: NewHost):
+        name = body.name.strip()
+        address = body.address.strip()
+        if any(h.name.lower() == name.lower() for h in config.hosts):
+            raise HTTPException(409, f"a host named {name!r} already exists")
+        if body.check not in ("ping", "tcp"):
+            raise HTTPException(422, "check must be 'ping' or 'tcp'")
+        if body.check == "tcp" and body.port is None:
+            raise HTTPException(422, "tcp check requires a port")
+        url = (body.throughput_url or "").strip()
+        if url and not (url.startswith("http://") or url.startswith("https://")):
+            raise HTTPException(422, "throughput URL must start with http:// or https://")
+
+        checks: dict = {body.check: {"port": body.port} if body.check == "tcp" else {}}
+        if url:
+            checks["throughput"] = {"method": "http", "url": url}
+        try:
+            host = build_host({"name": name, "address": address, "checks": checks},
+                              config.check_defaults)
+        except ConfigError as e:
+            raise HTTPException(422, str(e)) from None
+
+        config.hosts.append(host)
+        monitor.add_host(host)
+        save_hosts(config)
+        return {"ok": True, "name": host.name}
+
+    @app.delete("/api/hosts/{host_name}")
+    async def api_remove_host(host_name: str):
+        host = next((h for h in config.hosts if h.name == host_name), None)
+        if host is None:
+            raise HTTPException(404, f"unknown host: {host_name}")
+        config.hosts.remove(host)
+        await monitor.remove_host(host.name)
+        db.delete_host(host.name)
+        save_hosts(config)
+        return {"ok": True}
 
     @app.get("/")
     def index():

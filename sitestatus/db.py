@@ -130,6 +130,12 @@ class Database:
             "avg_loss": row["avg_loss"],
         }
 
+    def delete_host(self, host: str) -> None:
+        with self._lock:
+            self._conn.execute("DELETE FROM ping_samples WHERE host=?", (host,))
+            self._conn.execute("DELETE FROM throughput_samples WHERE host=?", (host,))
+            self._conn.commit()
+
     def prune(self, older_than: float) -> None:
         with self._lock:
             self._conn.execute("DELETE FROM ping_samples WHERE ts < ?", (older_than,))

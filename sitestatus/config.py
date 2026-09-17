@@ -62,13 +62,15 @@ class Config:
     degraded_loss_pct: float
     degraded_latency_ms: float
     hosts: list[Host]
+    path: Path
+    check_defaults: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
 class ConfigError(Exception):
     pass
 
 
-def _build_host(raw: dict[str, Any], d: dict[str, Any]) -> Host:
+def build_host(raw: dict[str, Any], d: dict[str, Any]) -> Host:
     try:
         name = str(raw["name"])
         address = str(raw["address"])
@@ -132,7 +134,7 @@ def load_config(path: str | Path) -> Config:
     if not hosts_raw:
         raise ConfigError("config has no hosts")
 
-    hosts = [_build_host(h, d) for h in hosts_raw]
+    hosts = [build_host(h, d) for h in hosts_raw]
     names = [h.name for h in hosts]
     if len(names) != len(set(names)):
         raise ConfigError("host names must be unique")
@@ -149,4 +151,38 @@ def load_config(path: str | Path) -> Config:
         degraded_loss_pct=float(d["degraded_loss_pct"]),
         degraded_latency_ms=float(d["degraded_latency_ms"]),
         hosts=hosts,
+        path=path,
+        check_defaults=d,
     )
+
+
+def host_to_raw(h: Host) -> dict[str, Any]:
+    """Host back to config-file form (explicit values, no defaults magic)."""
+    checks: dict[str, Any] = {}
+    if h.ping:
+        checks["ping"] = {"interval": h.ping.interval, "count": h.ping.count,
+                          "timeout": h.ping.timeout}
+    if h.tcp:
+        checks["tcp"] = {"port": h.tcp.port, "interval": h.tcp.interval,
+                         "timeout": h.tcp.timeout}
+    if h.throughput:
+        t: dict[str, Any] = {"method": h.throughput.method,
+                             "interval": h.throughput.interval,
+                             "max_seconds": h.throughput.max_seconds}
+        if h.throughput.method == "http":
+            t["url"] = h.throughput.url
+        else:
+            t["port"] = h.throughput.port
+        checks["throughput"] = t
+    return {"name": h.name, "address": h.address, "checks": checks}
+
+
+def save_hosts(cfg: Config) -> None:
+    """Rewrite the hosts section of the config file from cfg.hosts.
+
+    Load-modify-dump: everything else in the file is preserved, though
+    YAML comments inside the file are lost on the first UI edit.
+    """
+    raw = yaml.safe_load(cfg.path.read_text()) or {}
+    raw["hosts"] = [host_to_raw(h) for h in cfg.hosts]
+    cfg.path.write_text(yaml.safe_dump(raw, sort_keys=False, default_flow_style=False))
